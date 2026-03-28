@@ -17,7 +17,7 @@ public record ProcessInboundMessageCommand(
     string MessageBody,
     string WhatsAppMessageId,
     MessageType MessageType = MessageType.Text,
-    string? MediaUrl = null) : IRequest<r>;
+    string? MediaUrl = null) : IRequest<Result>;
 
 public class ProcessInboundMessageCommandHandler : IRequestHandler<ProcessInboundMessageCommand, Result>
 {
@@ -47,7 +47,7 @@ public class ProcessInboundMessageCommandHandler : IRequestHandler<ProcessInboun
         _uow = uow; _logger = logger;
     }
 
-    public async Task<r> Handle(ProcessInboundMessageCommand request, CancellationToken ct)
+    public async Task<Result> Handle(ProcessInboundMessageCommand request, CancellationToken ct)
     {
         // Idempotency: skip if already processed
         var existing = await _messages.GetByWhatsAppIdAsync(request.WhatsAppMessageId, ct);
@@ -196,7 +196,7 @@ public class ProcessInboundMessageCommandHandler : IRequestHandler<ProcessInboun
 public record ProcessMessageStatusCommand(
     string WhatsAppMessageId,
     string Status,
-    DateTime Timestamp) : IRequest<r>;
+    DateTime Timestamp) : IRequest<Result>;
 
 public class ProcessMessageStatusCommandHandler : IRequestHandler<ProcessMessageStatusCommand, Result>
 {
@@ -208,7 +208,7 @@ public class ProcessMessageStatusCommandHandler : IRequestHandler<ProcessMessage
         _messages = messages; _uow = uow;
     }
 
-    public async Task<r> Handle(ProcessMessageStatusCommand request, CancellationToken ct)
+    public async Task<Result> Handle(ProcessMessageStatusCommand request, CancellationToken ct)
     {
         var message = await _messages.GetByWhatsAppIdAsync(request.WhatsAppMessageId, ct);
         if (message is null) return Result.Success();
@@ -222,10 +222,5 @@ public class ProcessMessageStatusCommandHandler : IRequestHandler<ProcessMessage
 
         await _uow.SaveChangesAsync(ct);
         return Result.Success();
-    }
-
-    Task<Result> IRequestHandler<ProcessMessageStatusCommand, Result>.Handle(ProcessMessageStatusCommand request, CancellationToken cancellationToken)
-    {
-        throw new NotImplementedException();
     }
 }

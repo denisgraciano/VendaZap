@@ -152,7 +152,7 @@ public class CreateOrderFromConversationCommandHandler : IRequestHandler<CreateO
 }
 
 public record UpdateOrderStatusCommand(Guid OrderId, OrderStatus NewStatus, string? TrackingCode = null, string? CancellationReason = null)
-    : IRequest<r>;
+    : IRequest<Result>;
 
 public class UpdateOrderStatusCommandHandler : IRequestHandler<UpdateOrderStatusCommand, Result>
 {
@@ -165,7 +165,7 @@ public class UpdateOrderStatusCommandHandler : IRequestHandler<UpdateOrderStatus
         _orders = orders; _uow = uow; _tenant = tenant;
     }
 
-    public async Task<r> Handle(UpdateOrderStatusCommand request, CancellationToken ct)
+    public async Task<Result> Handle(UpdateOrderStatusCommand request, CancellationToken ct)
     {
         var order = await _orders.GetByIdAsync(request.OrderId, ct);
         if (order is null || order.TenantId != _tenant.TenantId)

@@ -1,0 +1,130 @@
+version: '3.9'
+
+services:
+  # ─── API ──────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: src/VendaZap.API/Dockerfile
+    container_name: vendazap-api
+    ports:
+      - "5000:8080"
+      - "5001:8081"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=vendazap;Username=postgres;Password=postgres
+      - ConnectionStrings__Redis=redis:6379
+      - Jwt__Secret=CHANGE_THIS_TO_A_VERY_LONG_AND_SECURE_SECRET_KEY_AT_LEAST_32_CHARS
+      - OpenAI__ApiKey=${OPENAI_API_KEY}
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=vendazap
+      - RabbitMQ__Password=vendazap123
+      - Seq__ServerUrl=http://seq:5341
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - vendazap-network
+    restart: unless-stopped
+
+  # ─── PostgreSQL ───────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: vendazap-postgres
+    environment:
+      POSTGRES_DB: vendazap
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vendazap-network
+
+  # ─── Redis ────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: vendazap-redis
+    command: redis-server --appendonly yes --requirepass vendazap123
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "vendazap123", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vendazap-network
+
+  # ─── RabbitMQ ─────────────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: vendazap-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: vendazap
+      RABBITMQ_DEFAULT_PASS: vendazap123
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - vendazap-network
+
+  # ─── Seq (Structured Logs) ────────────────────────────────────────────────
+  seq:
+    image: datalust/seq:latest
+    container_name: vendazap-seq
+    environment:
+      ACCEPT_EULA: "Y"
+    ports:
+      - "5341:5341"
+      - "8088:80"
+    volumes:
+      - seq_data:/data
+    networks:
+      - vendazap-network
+
+  # ─── pgAdmin (optional) ───────────────────────────────────────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: vendazap-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@vendazap.com.br
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - vendazap-network
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  seq_data:
+
+networks:
+  vendazap-network:
+    driver: bridge

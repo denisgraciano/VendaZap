@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using MassTransit;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;

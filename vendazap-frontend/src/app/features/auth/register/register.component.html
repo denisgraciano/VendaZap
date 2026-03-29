@@ -1,0 +1,93 @@
+<div class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
+  <div class="w-full max-w-md space-y-8">
+    <div class="text-center">
+      <h1 class="text-3xl font-bold text-gray-900">VendaZap</h1>
+      <p class="mt-2 text-sm text-gray-500">Crie sua conta</p>
+    </div>
+
+    <div class="bg-white py-8 px-6 shadow rounded-xl">
+      @if (errorMessage) {
+        <div class="mb-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+          {{ errorMessage }}
+        </div>
+      }
+
+      <form [formGroup]="form" (ngSubmit)="onSubmit()" class="flex flex-col gap-4" novalidate>
+        <mat-form-field appearance="outline" class="w-full">
+          <mat-label>Nome da empresa</mat-label>
+          <input matInput type="text" formControlName="companyName" autocomplete="organization" />
+          @if (form.get('companyName')?.hasError('required') && form.get('companyName')?.touched) {
+            <mat-error>Nome da empresa é obrigatório</mat-error>
+          } @else if (form.get('companyName')?.hasError('minlength') && form.get('companyName')?.touched) {
+            <mat-error>Mínimo de 2 caracteres</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="w-full">
+          <mat-label>Email</mat-label>
+          <input matInput type="email" formControlName="email" autocomplete="email" />
+          @if (form.get('email')?.hasError('required') && form.get('email')?.touched) {
+            <mat-error>Email é obrigatório</mat-error>
+          } @else if (form.get('email')?.hasError('email') && form.get('email')?.touched) {
+            <mat-error>Informe um email válido</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="w-full">
+          <mat-label>Senha</mat-label>
+          <input
+            matInput
+            [type]="hidePassword ? 'password' : 'text'"
+            formControlName="password"
+            autocomplete="new-password"
+          />
+          <button mat-icon-button matSuffix type="button" (click)="hidePassword = !hidePassword">
+            <mat-icon>{{ hidePassword ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+          @if (form.get('password')?.hasError('required') && form.get('password')?.touched) {
+            <mat-error>Senha é obrigatória</mat-error>
+          } @else if (form.get('password')?.hasError('minlength') && form.get('password')?.touched) {
+            <mat-error>Mínimo de 6 caracteres</mat-error>
+          }
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="w-full">
+          <mat-label>Confirmar senha</mat-label>
+          <input
+            matInput
+            [type]="hideConfirm ? 'password' : 'text'"
+            formControlName="confirmPassword"
+            autocomplete="new-password"
+          />
+          <button mat-icon-button matSuffix type="button" (click)="hideConfirm = !hideConfirm">
+            <mat-icon>{{ hideConfirm ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+          @if (form.get('confirmPassword')?.hasError('required') && form.get('confirmPassword')?.touched) {
+            <mat-error>Confirmação de senha é obrigatória</mat-error>
+          } @else if (form.hasError('passwordMismatch') && form.get('confirmPassword')?.touched) {
+            <mat-error>As senhas não coincidem</mat-error>
+          }
+        </mat-form-field>
+
+        <button
+          mat-flat-button
+          type="submit"
+          class="w-full"
+          [disabled]="isLoading"
+        >
+          @if (isLoading) {
+            <mat-spinner diameter="20" class="inline-block mr-2" />
+          }
+          Criar conta
+        </button>
+      </form>
+
+      <p class="mt-6 text-center text-sm text-gray-500">
+        Já tem uma conta?
+        <a routerLink="/auth/login" class="font-medium text-blue-600 hover:underline">
+          Entrar
+        </a>
+      </p>
+    </div>
+  </div>
+</div>

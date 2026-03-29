@@ -1,5 +1,7 @@
 using Asp.Versioning;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using RabbitMQ.Client;
 using Serilog;
 using Serilog.Events;
 using VendaZap.API.Middleware;
@@ -7,7 +9,8 @@ using VendaZap.Application;
 using VendaZap.Infrastructure;
 using VendaZap.Infrastructure.Messaging;
 using VendaZap.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
+using RabbitMQ.Client;
+using HealthChecks.RabbitMQ;
 
 // ─── Bootstrap Logger ─────────────────────────────────────────────────────────
 Log.Logger = new LoggerConfiguration()
@@ -114,7 +117,7 @@ try
     builder.Services.AddHealthChecks()
         .AddNpgSql(builder.Configuration.GetConnectionString("DefaultConnection")!, name: "postgresql")
         .AddRedis(builder.Configuration.GetConnectionString("Redis")!, name: "redis")
-        .AddRabbitMQ(builder.Configuration["RabbitMQ:Host"]!, name: "rabbitmq");
+        .AddRabbitMQ(sp => sp.GetRequiredService<IConnection>(), name: "rabbitmq");
 
     var app = builder.Build();
 

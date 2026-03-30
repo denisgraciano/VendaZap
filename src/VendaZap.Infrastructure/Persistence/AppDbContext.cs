@@ -32,40 +32,43 @@ public class AppDbContext : DbContext
     public DbSet<Campaign> Campaigns => Set<Campaign>();
     public DbSet<AutoReplyTemplate> AutoReplyTemplates => Set<AutoReplyTemplate>();
 
-    // Propriedade avaliada em tempo de execução pela expressão do filtro
-    private Guid? CurrentTenantId => _tenantContext?.TenantId;
+    // Helpers avaliados em tempo de execução pelas expressões dos filtros.
+    // Separar flag + valor evita NullReferenceException no .Value quando
+    // não há tenant autenticado (ex: login, registro, migrations).
+    private bool HasTenantFilter => _tenantContext?.TenantId.HasValue ?? false;
+    private Guid TenantFilterId => _tenantContext?.TenantId ?? Guid.Empty;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
         // ─── Global Query Filters (isolamento multi-tenant) ───────────────────
-        // Quando CurrentTenantId é null (ex: migrations, registro de tenant),
-        // o filtro não é aplicado. Quando há um tenant autenticado, todas as
-        // queries são automaticamente filtradas pelo TenantId do contexto.
+        // Quando HasTenantFilter = false (sem tenant autenticado), o filtro
+        // não é aplicado e todas as queries retornam normalmente.
+        // Quando HasTenantFilter = true, todas as queries filtram pelo TenantId.
         modelBuilder.Entity<User>()
-            .HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId.Value);
+            .HasQueryFilter(e => !HasTenantFilter || e.TenantId == TenantFilterId);
 
         modelBuilder.Entity<Product>()
-            .HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId.Value);
+            .HasQueryFilter(e => !HasTenantFilter || e.TenantId == TenantFilterId);
 
         modelBuilder.Entity<Contact>()
-            .HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId.Value);
+            .HasQueryFilter(e => !HasTenantFilter || e.TenantId == TenantFilterId);
 
         modelBuilder.Entity<Conversation>()
-            .HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId.Value);
+            .HasQueryFilter(e => !HasTenantFilter || e.TenantId == TenantFilterId);
 
         modelBuilder.Entity<Message>()
-            .HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId.Value);
+            .HasQueryFilter(e => !HasTenantFilter || e.TenantId == TenantFilterId);
 
         modelBuilder.Entity<Order>()
-            .HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId.Value);
+            .HasQueryFilter(e => !HasTenantFilter || e.TenantId == TenantFilterId);
 
         modelBuilder.Entity<Campaign>()
-            .HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId.Value);
+            .HasQueryFilter(e => !HasTenantFilter || e.TenantId == TenantFilterId);
 
         modelBuilder.Entity<AutoReplyTemplate>()
-            .HasQueryFilter(e => CurrentTenantId == null || e.TenantId == CurrentTenantId.Value);
+            .HasQueryFilter(e => !HasTenantFilter || e.TenantId == TenantFilterId);
 
         base.OnModelCreating(modelBuilder);
     }

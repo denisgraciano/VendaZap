@@ -18,6 +18,7 @@ using VendaZap.Infrastructure.Persistence;
 using VendaZap.Infrastructure.Persistence.Repositories;
 using VendaZap.Infrastructure.WhatsApp;
 using VendaZap.Domain.Interfaces;
+using VendaZap.Infrastructure.Storage;
 
 namespace VendaZap.Infrastructure;
 
@@ -31,6 +32,7 @@ public static class DependencyInjection
             .AddCaching(config)
             .AddWhatsAppService(config)
             .AddAiService(config)
+            .AddStorageService(config)
             .AddMessaging(config)
             .AddSignalRServices()
             .AddRepositories();
@@ -129,6 +131,13 @@ public static class DependencyInjection
     private static IServiceCollection AddAiService(this IServiceCollection services, IConfiguration config)
     {
         services.AddScoped<IAiConversationService, OpenAiConversationService>();
+        return services;
+    }
+
+    public static IServiceCollection AddStorageService(this IServiceCollection services, IConfiguration config)
+    {
+        // LocalStorageService para desenvolvimento. Substituir por AzureBlobStorageService ou S3StorageService em produção.
+        services.AddScoped<IStorageService, LocalStorageService>();
         return services;
     }
 

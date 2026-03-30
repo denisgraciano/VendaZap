@@ -695,6 +695,9 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
             b.HasIndex("TenantId", "Status")
                 .HasDatabaseName("ix_products_tenant_id_status");
 
+            b.HasIndex("TenantId", "Status", "Category")
+                .HasDatabaseName("ix_products_tenant_id_status_category");
+
             b.ToTable("products");
         });
 

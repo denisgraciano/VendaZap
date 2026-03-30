@@ -153,6 +153,7 @@ try
     app.UseCors("VendaZapPolicy");
     app.UseAuthentication();
     app.UseAuthorization();
+    app.UseTenantContext();
     app.MapControllers();
 
     // SignalR Hub

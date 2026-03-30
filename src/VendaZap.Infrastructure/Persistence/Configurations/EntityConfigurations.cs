@@ -58,6 +58,7 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
 
         builder.HasIndex(p => p.TenantId);
         builder.HasIndex(p => new { p.TenantId, p.Status });
+        builder.HasIndex(p => new { p.TenantId, p.Status, p.Category });
     }
 }
 

@@ -2,6 +2,7 @@ using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using VendaZap.Application.Common.Interfaces;
 using VendaZap.Application.Features.Conversations;
 using VendaZap.Application.Features.Dashboard;
 using VendaZap.Application.Features.Orders;
@@ -19,16 +20,24 @@ namespace VendaZap.API.Controllers;
 public class ProductsController : ControllerBase
 {
     private readonly IMediator _mediator;
-    public ProductsController(IMediator mediator) => _mediator = mediator;
+    private readonly IStorageService _storage;
+
+    public ProductsController(IMediator mediator, IStorageService storage)
+    {
+        _mediator = mediator;
+        _storage = storage;
+    }
 
     [HttpGet]
     public async Task<IActionResult> GetAll(
         [FromQuery] bool activeOnly = true,
         [FromQuery] string? category = null,
         [FromQuery] string? search = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
         CancellationToken ct = default)
     {
-        var result = await _mediator.Send(new GetProductsQuery(activeOnly, category, search), ct);
+        var result = await _mediator.Send(new GetProductsQuery(activeOnly, category, search, page, pageSize), ct);
         return result.IsSuccess ? Ok(result.Value) : NotFound(new { error = result.Error.Description });
     }
 
@@ -60,6 +69,44 @@ public class ProductsController : ControllerBase
     {
         var result = await _mediator.Send(new UpdateProductStockCommand(id, body.Quantity), ct);
         return result.IsSuccess ? NoContent() : BadRequest(new { error = result.Error.Description });
+    }
+
+    [HttpPatch("{id:guid}/toggle-active")]
+    [Authorize(Policy = "ManagerOrAbove")]
+    public async Task<IActionResult> ToggleActive(Guid id, CancellationToken ct)
+    {
+        var result = await _mediator.Send(new ToggleProductActiveCommand(id), ct);
+        return result.IsSuccess ? Ok(result.Value) : NotFound(new { error = result.Error.Description });
+    }
+
+    /// <summary>
+    /// Faz upload de imagem para um produto. Retorna a URL pública da imagem.
+    /// </summary>
+    [HttpPost("{id:guid}/image")]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadImage(Guid id, IFormFile file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { error = "Arquivo de imagem é obrigatório." });
+
+        if (file.Length > 5 * 1024 * 1024)
+            return BadRequest(new { error = "Tamanho máximo permitido é 5 MB." });
+
+        string imageUrl;
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            imageUrl = await _storage.UploadAsync(stream, file.FileName, file.ContentType, "products", ct);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+
+        var result = await _mediator.Send(new UpdateProductImageCommand(id, imageUrl), ct);
+        if (result.IsFailure) return NotFound(new { error = result.Error.Description });
+
+        return Ok(new { imageUrl, product = result.Value });
     }
 
     [HttpDelete("{id:guid}")]

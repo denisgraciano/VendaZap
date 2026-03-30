@@ -150,6 +150,7 @@ try
     }
 
     app.UseHttpsRedirection();
+    app.UseStaticFiles(); // Serve arquivos de wwwroot (imagens de produtos no ambiente de dev)
     app.UseCors("VendaZapPolicy");
     app.UseAuthentication();
     app.UseAuthorization();

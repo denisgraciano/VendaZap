@@ -123,6 +123,11 @@ public static class DependencyInjection
         services.AddHttpClient<IWhatsAppService, WhatsAppService>()
             .AddTransientHttpErrorPolicy(p =>
                 p.WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt))));
+
+        services.AddHttpClient<IWhatsAppClient, WhatsAppClient>()
+            .AddTransientHttpErrorPolicy(p =>
+                p.WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt))));
+
         return services;
     }
 
@@ -140,6 +145,7 @@ public static class DependencyInjection
             x.AddConsumer<WhatsAppStatusUpdateConsumer>();
             x.AddConsumer<AbandonedCartConsumer>();
             x.AddConsumer<FollowUpJobConsumer>();
+            x.AddConsumer<OutgoingWhatsAppMessageConsumer>();
 
             x.UsingRabbitMq((ctx, cfg) =>
             {
@@ -172,6 +178,16 @@ public static class DependencyInjection
                 cfg.ReceiveEndpoint("vendazap-follow-ups", e =>
                 {
                     e.ConfigureConsumer<FollowUpJobConsumer>(ctx);
+                });
+
+                cfg.ReceiveEndpoint("vendazap.outgoing-messages", e =>
+                {
+                    e.PrefetchCount = 20;
+                    e.UseMessageRetry(r => r.Intervals(
+                        TimeSpan.FromSeconds(5),
+                        TimeSpan.FromSeconds(30),
+                        TimeSpan.FromMinutes(2)));
+                    e.ConfigureConsumer<OutgoingWhatsAppMessageConsumer>(ctx);
                 });
 
                 cfg.ConfigureEndpoints(ctx);

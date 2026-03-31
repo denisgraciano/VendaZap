@@ -9,6 +9,19 @@ namespace VendaZap.Infrastructure.Messaging.Consumers;
 
 // ─── Message Contracts ────────────────────────────────────────────────────────
 
+public record OutgoingWhatsAppMessage(
+    Guid TenantId,
+    string PhoneNumberId,
+    string AccessToken,
+    string ToPhone,
+    string MessageType,
+    string? TextBody = null,
+    string? ImageUrl = null,
+    string? ImageCaption = null,
+    IEnumerable<WhatsAppButton>? Buttons = null,
+    string? ListButtonText = null,
+    IEnumerable<WhatsAppListSection>? ListSections = null);
+
 public record InboundWhatsAppMessage(
     Guid TenantId,
     string FromPhone,
@@ -121,6 +134,52 @@ public class AbandonedCartConsumer : IConsumer<AbandonedCartJob>
 
         campaign.RecordSent();
         _logger.LogInformation("Sent abandoned cart message for conversation {ConversationId}", job.ConversationId);
+    }
+}
+
+public class OutgoingWhatsAppMessageConsumer : IConsumer<OutgoingWhatsAppMessage>
+{
+    private readonly IWhatsAppClient _whatsAppClient;
+    private readonly ILogger<OutgoingWhatsAppMessageConsumer> _logger;
+
+    public OutgoingWhatsAppMessageConsumer(IWhatsAppClient whatsAppClient, ILogger<OutgoingWhatsAppMessageConsumer> logger)
+    {
+        _whatsAppClient = whatsAppClient;
+        _logger = logger;
+    }
+
+    public async Task Consume(ConsumeContext<OutgoingWhatsAppMessage> context)
+    {
+        var msg = context.Message;
+        _logger.LogInformation("Processing outgoing WhatsApp {MessageType} for tenant {TenantId} to {Phone}",
+            msg.MessageType, msg.TenantId, msg.ToPhone.Length > 4 ? msg.ToPhone[..4] + "****" : "****");
+
+        string? messageId = msg.MessageType switch
+        {
+            "text" => await _whatsAppClient.SendTextAsync(
+                msg.PhoneNumberId, msg.AccessToken, msg.ToPhone,
+                msg.TextBody ?? string.Empty, context.CancellationToken),
+
+            "image" => await _whatsAppClient.SendImageAsync(
+                msg.PhoneNumberId, msg.AccessToken, msg.ToPhone,
+                msg.ImageUrl!, msg.ImageCaption, context.CancellationToken),
+
+            "interactive_buttons" when msg.Buttons is not null => await _whatsAppClient.SendInteractiveButtonsAsync(
+                msg.PhoneNumberId, msg.AccessToken, msg.ToPhone,
+                msg.TextBody ?? string.Empty, msg.Buttons, context.CancellationToken),
+
+            "interactive_list" when msg.ListSections is not null => await _whatsAppClient.SendInteractiveListAsync(
+                msg.PhoneNumberId, msg.AccessToken, msg.ToPhone,
+                msg.TextBody ?? string.Empty, msg.ListButtonText ?? "Selecionar",
+                msg.ListSections, context.CancellationToken),
+
+            _ => throw new ArgumentException($"Unsupported message type: {msg.MessageType}")
+        };
+
+        if (messageId is null)
+            throw new InvalidOperationException($"Failed to send WhatsApp {msg.MessageType} for tenant {msg.TenantId}");
+
+        _logger.LogInformation("Outgoing WhatsApp {MessageType} delivered. MessageId: {MessageId}", msg.MessageType, messageId);
     }
 }
 

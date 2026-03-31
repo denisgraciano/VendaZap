@@ -220,3 +220,14 @@ public class AutoReplyTemplateRepository : Repository<AutoReplyTemplate>, IAutoR
             .OrderByDescending(t => t.Priority)
             .ToListAsync(ct);
 }
+
+public class WhatsAppAccountRepository : Repository<WhatsAppAccount>, IWhatsAppAccountRepository
+{
+    public WhatsAppAccountRepository(AppDbContext context) : base(context) { }
+
+    public async Task<WhatsAppAccount?> GetByPhoneNumberIdAsync(string phoneNumberId, CancellationToken ct = default)
+        => await _dbSet.FirstOrDefaultAsync(a => a.PhoneNumberId == phoneNumberId, ct);
+
+    public async Task<IEnumerable<WhatsAppAccount>> GetByTenantAsync(Guid tenantId, CancellationToken ct = default)
+        => await _dbSet.Where(a => a.TenantId == tenantId).ToListAsync(ct);
+}

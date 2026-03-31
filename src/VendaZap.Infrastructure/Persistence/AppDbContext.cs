@@ -31,6 +31,7 @@ public class AppDbContext : DbContext
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<Campaign> Campaigns => Set<Campaign>();
     public DbSet<AutoReplyTemplate> AutoReplyTemplates => Set<AutoReplyTemplate>();
+    public DbSet<WhatsAppAccount> WhatsAppAccounts => Set<WhatsAppAccount>();
 
     // Helpers avaliados em tempo de execução pelas expressões dos filtros.
     // Separar flag + valor evita NullReferenceException no .Value quando
@@ -68,6 +69,9 @@ public class AppDbContext : DbContext
             .HasQueryFilter(e => !HasTenantFilter || e.TenantId == TenantFilterId);
 
         modelBuilder.Entity<AutoReplyTemplate>()
+            .HasQueryFilter(e => !HasTenantFilter || e.TenantId == TenantFilterId);
+
+        modelBuilder.Entity<WhatsAppAccount>()
             .HasQueryFilter(e => !HasTenantFilter || e.TenantId == TenantFilterId);
 
         base.OnModelCreating(modelBuilder);

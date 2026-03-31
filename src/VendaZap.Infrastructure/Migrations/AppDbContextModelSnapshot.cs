@@ -957,6 +957,59 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
             b.Navigation("Total").IsRequired();
         });
 
+        modelBuilder.Entity("VendaZap.Domain.Entities.WhatsAppAccount", b =>
+        {
+            b.Property<Guid>("Id")
+                .ValueGeneratedOnAdd()
+                .HasColumnType("uuid")
+                .HasColumnName("id");
+
+            b.Property<string>("AccessTokenEncrypted")
+                .IsRequired()
+                .HasMaxLength(1000)
+                .HasColumnType("character varying(1000)")
+                .HasColumnName("access_token_encrypted");
+
+            b.Property<DateTime>("CreatedAt")
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("created_at");
+
+            b.Property<string>("DisplayName")
+                .HasMaxLength(200)
+                .HasColumnType("character varying(200)")
+                .HasColumnName("display_name");
+
+            b.Property<string>("PhoneNumberId")
+                .IsRequired()
+                .HasMaxLength(50)
+                .HasColumnType("character varying(50)")
+                .HasColumnName("phone_number_id");
+
+            b.Property<int>("Status")
+                .HasColumnType("integer")
+                .HasColumnName("status");
+
+            b.Property<Guid>("TenantId")
+                .HasColumnType("uuid")
+                .HasColumnName("tenant_id");
+
+            b.Property<DateTime?>("UpdatedAt")
+                .HasColumnType("timestamp with time zone")
+                .HasColumnName("updated_at");
+
+            b.HasKey("Id")
+                .HasName("pk_whats_app_accounts");
+
+            b.HasIndex("PhoneNumberId")
+                .IsUnique()
+                .HasDatabaseName("ix_whats_app_accounts_phone_number_id");
+
+            b.HasIndex("TenantId")
+                .HasDatabaseName("ix_whats_app_accounts_tenant_id");
+
+            b.ToTable("whats_app_accounts");
+        });
+
         // ── relationships ─────────────────────────────────────────────────────
 
         modelBuilder.Entity("VendaZap.Domain.Entities.Campaign", b =>
@@ -1106,6 +1159,17 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
         {
             b.Navigation("Users");
             b.Navigation("Products");
+        });
+
+        modelBuilder.Entity("VendaZap.Domain.Entities.WhatsAppAccount", b =>
+        {
+            b.HasOne("VendaZap.Domain.Entities.Tenant", "Tenant")
+                .WithMany()
+                .HasForeignKey("TenantId")
+                .OnDelete(DeleteBehavior.Cascade)
+                .IsRequired();
+
+            b.Navigation("Tenant");
         });
 
 #pragma warning restore 612, 618

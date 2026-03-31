@@ -90,7 +90,18 @@ public class ProcessInboundMessageCommandHandler : IRequestHandler<ProcessInboun
 
         // 5. Generate response if in Bot mode
         if (conversation.IsBot())
-            await HandleBotResponseAsync(tenant, conversation, contact, request.MessageBody, isNewConversation, ct);
+        {
+            if (request.MessageType == MessageType.Audio)
+            {
+                // Áudio não é suportado: enviar resposta padrão e encerrar processamento
+                await SendBotMessageAsync(tenant, conversation, contact,
+                    "Recebi um áudio, mas ainda não consigo processá-lo. Por favor, envie sua mensagem em texto. 😊", ct);
+            }
+            else
+            {
+                await HandleBotResponseAsync(tenant, conversation, contact, request.MessageBody, isNewConversation, ct);
+            }
+        }
 
         return Result.Success();
     }

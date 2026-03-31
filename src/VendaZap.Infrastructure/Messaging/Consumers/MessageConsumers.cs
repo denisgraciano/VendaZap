@@ -9,7 +9,7 @@ namespace VendaZap.Infrastructure.Messaging.Consumers;
 
 // ─── Message Contracts ────────────────────────────────────────────────────────
 
-public record InboundWhatsAppMessage(
+public record IncomingMessageEvent(
     Guid TenantId,
     string FromPhone,
     string? ContactName,
@@ -29,17 +29,17 @@ public record FollowUpJob(Guid TenantId, Guid ConversationId, Guid CampaignId, s
 
 // ─── Consumers ────────────────────────────────────────────────────────────────
 
-public class InboundWhatsAppMessageConsumer : IConsumer<InboundWhatsAppMessage>
+public class IncomingMessageConsumer : IConsumer<IncomingMessageEvent>
 {
     private readonly IMediator _mediator;
-    private readonly ILogger<InboundWhatsAppMessageConsumer> _logger;
+    private readonly ILogger<IncomingMessageConsumer> _logger;
 
-    public InboundWhatsAppMessageConsumer(IMediator mediator, ILogger<InboundWhatsAppMessageConsumer> logger)
+    public IncomingMessageConsumer(IMediator mediator, ILogger<IncomingMessageConsumer> logger)
     {
         _mediator = mediator; _logger = logger;
     }
 
-    public async Task Consume(ConsumeContext<InboundWhatsAppMessage> context)
+    public async Task Consume(ConsumeContext<IncomingMessageEvent> context)
     {
         var msg = context.Message;
         _logger.LogInformation("Processing inbound WhatsApp message from {Phone} for tenant {TenantId}",

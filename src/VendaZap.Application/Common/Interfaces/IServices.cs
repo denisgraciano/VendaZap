@@ -79,3 +79,9 @@ public interface INotificationService
     Task NotifyNewOrderAsync(Guid tenantId, string orderNumber, decimal total, CancellationToken ct = default);
     Task NotifyHumanTakeoverRequestAsync(Guid tenantId, Guid conversationId, string contactName, CancellationToken ct = default);
 }
+
+public interface IEncryptionService
+{
+    string Encrypt(string plaintext);
+    string Decrypt(string ciphertext);
+}

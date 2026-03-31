@@ -43,3 +43,5 @@ public enum CampaignTrigger
     ScheduledTime = 5,
     InactiveContact = 6
 }
+
+public enum WhatsAppAccountStatus { Active = 1, Inactive = 2, Suspended = 3 }

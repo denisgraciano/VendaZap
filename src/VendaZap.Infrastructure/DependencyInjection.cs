@@ -1,5 +1,6 @@
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,7 @@ using VendaZap.Infrastructure.Messaging;
 using VendaZap.Infrastructure.Messaging.Consumers;
 using VendaZap.Infrastructure.Persistence;
 using VendaZap.Infrastructure.Persistence.Repositories;
+using VendaZap.Infrastructure.Security;
 using VendaZap.Infrastructure.WhatsApp;
 using VendaZap.Domain.Interfaces;
 
@@ -26,6 +28,10 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration config)
     {
         services
+            .AddDataProtection()
+            .SetApplicationName("VendaZap");
+
+        services
             .AddDatabase(config)
             .AddIdentityServices(config)
             .AddCaching(config)
@@ -34,6 +40,8 @@ public static class DependencyInjection
             .AddMessaging(config)
             .AddSignalRServices()
             .AddRepositories();
+
+        services.AddScoped<IEncryptionService, DataProtectionEncryptionService>();
 
         return services;
     }
@@ -136,7 +144,7 @@ public static class DependencyInjection
     {
         services.AddMassTransit(x =>
         {
-            x.AddConsumer<InboundWhatsAppMessageConsumer>();
+            x.AddConsumer<IncomingMessageConsumer>();
             x.AddConsumer<WhatsAppStatusUpdateConsumer>();
             x.AddConsumer<AbandonedCartConsumer>();
             x.AddConsumer<FollowUpJobConsumer>();
@@ -156,7 +164,7 @@ public static class DependencyInjection
                         TimeSpan.FromSeconds(5),
                         TimeSpan.FromSeconds(30),
                         TimeSpan.FromMinutes(2)));
-                    e.ConfigureConsumer<InboundWhatsAppMessageConsumer>(ctx);
+                    e.ConfigureConsumer<IncomingMessageConsumer>(ctx);
                 });
 
                 cfg.ReceiveEndpoint("vendazap-status-updates", e =>
@@ -199,6 +207,7 @@ public static class DependencyInjection
         services.AddScoped<IOrderRepository, OrderRepository>();
         services.AddScoped<ICampaignRepository, CampaignRepository>();
         services.AddScoped<IAutoReplyTemplateRepository, AutoReplyTemplateRepository>();
+        services.AddScoped<IWhatsAppAccountRepository, WhatsAppAccountRepository>();
         return services;
     }
 }

@@ -84,3 +84,9 @@ public interface IAutoReplyTemplateRepository : IRepository<AutoReplyTemplate>
 {
     Task<IEnumerable<AutoReplyTemplate>> GetActiveByTenantAsync(Guid tenantId, CancellationToken ct = default);
 }
+
+public interface IWhatsAppAccountRepository : IRepository<WhatsAppAccount>
+{
+    Task<WhatsAppAccount?> GetByPhoneNumberIdAsync(string phoneNumberId, CancellationToken ct = default);
+    Task<IEnumerable<WhatsAppAccount>> GetByTenantAsync(Guid tenantId, CancellationToken ct = default);
+}

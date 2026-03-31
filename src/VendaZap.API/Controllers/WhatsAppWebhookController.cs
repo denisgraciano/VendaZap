@@ -1,7 +1,9 @@
 using Asp.Versioning;
 using MassTransit;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Options;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using VendaZap.Infrastructure.Messaging.Consumers;
 using VendaZap.Infrastructure.WhatsApp;
 using VendaZap.Domain.Interfaces;
@@ -47,11 +49,43 @@ public class WhatsAppWebhookController : ControllerBase
 
     /// <summary>Recebe eventos do WhatsApp (mensagens, status).</summary>
     [HttpPost("{tenantSlug}")]
-    public async Task<IActionResult> Receive(
-        string tenantSlug,
-        [FromBody] WhatsAppWebhookPayload payload,
-        CancellationToken ct)
+    public async Task<IActionResult> Receive(string tenantSlug, CancellationToken ct)
     {
+        // Lê o body bruto para validação HMAC antes da deserialização
+        Request.EnableBuffering();
+        string rawBody;
+        using (var reader = new StreamReader(Request.Body, Encoding.UTF8, leaveOpen: true))
+        {
+            rawBody = await reader.ReadToEndAsync(ct);
+        }
+        Request.Body.Position = 0;
+
+        // Valida assinatura HMAC-SHA256
+        var appSecret = _config["WhatsApp:AppSecret"];
+        if (!string.IsNullOrEmpty(appSecret))
+        {
+            var signature = Request.Headers["X-Hub-Signature-256"].FirstOrDefault();
+            if (string.IsNullOrEmpty(signature) || !ValidateHmacSignature(rawBody, signature, appSecret))
+            {
+                _logger.LogWarning("Invalid HMAC-SHA256 signature on webhook for tenant {Slug}", tenantSlug);
+                return StatusCode(403);
+            }
+        }
+
+        WhatsAppWebhookPayload? payload;
+        try
+        {
+            payload = JsonSerializer.Deserialize<WhatsAppWebhookPayload>(rawBody,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Failed to deserialize webhook payload for tenant {Slug}", tenantSlug);
+            return Ok(); // Always 200 to prevent Meta retries
+        }
+
+        if (payload is null) return Ok();
+
         // Always return 200 immediately — WhatsApp retries if we don't
         _ = ProcessAsync(tenantSlug, payload, ct);
         return Ok();
@@ -79,6 +113,8 @@ public class WhatsAppWebhookController : ControllerBase
                     var contactName = value.contacts?
                         .FirstOrDefault(c => c.wa_id == msg.from)?.profile?.name;
 
+                    // Áudio: publicar IncomingMessageEvent com flag de áudio
+                    // O tipo já é passado e tratado no handler com resposta padrão
                     var messageBody = msg.type switch
                     {
                         "text" => msg.text?.body ?? string.Empty,
@@ -97,7 +133,7 @@ public class WhatsAppWebhookController : ControllerBase
                         _ => null
                     };
 
-                    await _bus.Publish(new InboundWhatsAppMessage(
+                    await _bus.Publish(new IncomingMessageEvent(
                         tenant.Id,
                         msg.from,
                         contactName,
@@ -120,5 +156,25 @@ public class WhatsAppWebhookController : ControllerBase
         {
             _logger.LogError(ex, "Error processing WhatsApp webhook for tenant {Slug}", tenantSlug);
         }
+    }
+
+    private static bool ValidateHmacSignature(string rawBody, string signature, string appSecret)
+    {
+        // Meta envia: sha256=<hash_hex>
+        if (!signature.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var receivedHash = signature["sha256=".Length..];
+        var keyBytes = Encoding.UTF8.GetBytes(appSecret);
+        var bodyBytes = Encoding.UTF8.GetBytes(rawBody);
+
+        using var hmac = new HMACSHA256(keyBytes);
+        var computedHash = hmac.ComputeHash(bodyBytes);
+        var computedHex = Convert.ToHexString(computedHash).ToLowerInvariant();
+
+        // Comparação em tempo constante para prevenir timing attacks
+        return CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(computedHex),
+            Encoding.UTF8.GetBytes(receivedHash.ToLowerInvariant()));
     }
 }

@@ -194,3 +194,20 @@ public class AutoReplyTemplateConfiguration : IEntityTypeConfiguration<AutoReply
         builder.HasIndex(t => new { t.TenantId, t.IsActive });
     }
 }
+
+public class WhatsAppAccountConfiguration : IEntityTypeConfiguration<WhatsAppAccount>
+{
+    public void Configure(EntityTypeBuilder<WhatsAppAccount> builder)
+    {
+        builder.HasKey(a => a.Id);
+        builder.Property(a => a.PhoneNumberId).HasMaxLength(50).IsRequired();
+        builder.Property(a => a.AccessTokenEncrypted).HasMaxLength(1000).IsRequired();
+        builder.Property(a => a.DisplayName).HasMaxLength(200);
+
+        builder.HasIndex(a => a.PhoneNumberId).IsUnique();
+        builder.HasIndex(a => a.TenantId);
+
+        builder.HasOne(a => a.Tenant).WithMany().HasForeignKey(a => a.TenantId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}

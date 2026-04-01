@@ -27,17 +27,20 @@ public class ProcessInboundMessageCommandHandler : IRequestHandler<ProcessInboun
     private readonly IProductRepository _products;
     private readonly ITenantRepository _tenants;
     private readonly IAutoReplyTemplateRepository _autoReplies;
-    private readonly IAiConversationService _ai;
+    private readonly IConversationAIService _ai;
     private readonly IWhatsAppService _whatsApp;
     private readonly INotificationService _notifications;
     private readonly IUnitOfWork _uow;
     private readonly ILogger<ProcessInboundMessageCommandHandler> _logger;
 
+    private const int ConfidenceThreshold = 70;
+    private const int HistoryLimit = 20;
+
     public ProcessInboundMessageCommandHandler(
         IContactRepository contacts, IConversationRepository conversations,
         IMessageRepository messages, IProductRepository products,
         ITenantRepository tenants, IAutoReplyTemplateRepository autoReplies,
-        IAiConversationService ai, IWhatsAppService whatsApp,
+        IConversationAIService ai, IWhatsAppService whatsApp,
         INotificationService notifications, IUnitOfWork uow,
         ILogger<ProcessInboundMessageCommandHandler> logger)
     {
@@ -116,55 +119,118 @@ public class ProcessInboundMessageCommandHandler : IRequestHandler<ProcessInboun
                 return;
             }
 
-            // Check for human transfer keywords
-            if (IsHumanTransferRequest(userMessage) && tenant.IsHumanTakeoverEnabled)
+            // Send welcome message for brand-new conversations without AI call
+            if (isNewConversation)
             {
-                conversation.TransferToHuman();
-                _conversations.Update(conversation);
-                await SendBotMessageAsync(tenant, conversation, contact,
-                    "Ok! Vou chamar um atendente para você. Por favor, aguarde um momento. 🙏", ct);
-                await _notifications.NotifyHumanTakeoverRequestAsync(tenant.Id, conversation.Id, contact.GetDisplayName(), ct);
+                var welcome = tenant.WelcomeMessage ?? "Olá! 👋 Como posso te ajudar?";
+                await SendBotMessageAsync(tenant, conversation, contact, welcome, ct);
                 return;
             }
 
-            // Build AI context with products
+            // Check for explicit human transfer keywords before hitting AI
+            if (IsHumanTransferRequest(userMessage) && tenant.IsHumanTakeoverEnabled)
+            {
+                await TransferToHumanAsync(tenant, conversation, contact, ct);
+                return;
+            }
+
+            // Load last 20 messages as AI context
+            var recentMessages = await _messages.GetByConversationAsync(conversation.Id, 1, HistoryLimit, ct);
+            var history = recentMessages
+                .OrderBy(m => m.CreatedAt)
+                .Select(m => new ConversationMessageContext(
+                    Role: m.Direction == MessageDirection.Inbound ? "user" : "assistant",
+                    Content: m.Content,
+                    SentAt: m.CreatedAt))
+                .ToList();
+
+            // Build AI context with tenant and product data
             var products = await _products.GetByTenantAsync(tenant.Id, true, ct);
-            var productSummaries = products.Select(p => new ProductSummary(
-                p.Id, p.Name, p.Price.Amount, p.Description, p.IsAvailable())).ToList();
+            var productInfos = products.Select(p =>
+                new AiProductInfo(p.Id, p.Name, p.Price.Amount, p.Description, p.IsAvailable())).ToList();
 
-            var context = new SalesContext(
-                tenant.Name,
-                contact.GetDisplayName(),
-                conversation.Stage.ToString(),
-                productSummaries,
-                conversation.CartJson,
-                BuildPaymentInfoString(tenant));
-
-            // Get/create AI thread
+            // Get/create AI thread for conversation tracking
             if (conversation.AiThreadId is null)
             {
-                var threadId = await _ai.CreateThreadAsync(ct);
+                var threadId = Guid.NewGuid().ToString("N");
                 conversation.SetAiThreadId(threadId);
                 _conversations.Update(conversation);
                 await _uow.SaveChangesAsync(ct);
             }
 
-            var aiResponse = isNewConversation
-                ? tenant.WelcomeMessage ?? "Olá! 👋 Como posso te ajudar?"
-                : await _ai.GetSalesResponseAsync(tenant.Id, userMessage, context, ct);
+            var aiContext = new AiSalesContext(
+                TenantName: tenant.Name,
+                ContactName: contact.GetDisplayName(),
+                CurrentStage: conversation.Stage.ToString(),
+                AvailableProducts: productInfos,
+                CartSummary: conversation.CartJson,
+                PaymentInfo: BuildPaymentInfoString(tenant),
+                CustomInstructions: null);
 
-            await SendBotMessageAsync(tenant, conversation, contact, aiResponse, ct);
+            // Call the AI engine
+            var aiResponse = await _ai.ProcessMessageAsync(tenant.Id, userMessage, history, aiContext, ct);
+
+            _logger.LogInformation(
+                "AI response for conversation {ConversationId}: intent={Intent}, confidence={Confidence}, next={NextAction}",
+                conversation.Id, aiResponse.Intent, aiResponse.Confidence, aiResponse.NextAction);
+
+            // Fallback: low confidence → transfer to human
+            if (aiResponse.Confidence < ConfidenceThreshold && tenant.IsHumanTakeoverEnabled)
+            {
+                _logger.LogInformation(
+                    "Low AI confidence ({Confidence}) for conversation {ConversationId}. Transferring to human.",
+                    aiResponse.Confidence, conversation.Id);
+                await TransferToHumanAsync(tenant, conversation, contact, ct);
+                return;
+            }
+
+            // Intent-based routing
+            if (aiResponse.Intent is "transferir_humano" && tenant.IsHumanTakeoverEnabled)
+            {
+                await TransferToHumanAsync(tenant, conversation, contact, ct);
+                return;
+            }
+
+            // Advance conversation stage based on intent
+            AdvanceStageFromIntent(conversation, aiResponse.Intent);
+
+            await SendBotMessageAsync(tenant, conversation, contact, aiResponse.Message, ct);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error generating bot response for conversation {ConversationId}", conversation.Id);
-            // Fallback message
             await SendBotMessageAsync(tenant, conversation, contact,
                 "Desculpe, ocorreu um erro. Tente novamente em instantes.", ct);
         }
     }
 
-    private async Task SendBotMessageAsync(Tenant tenant, Conversation conversation, Contact contact, string content, CancellationToken ct)
+    private async Task TransferToHumanAsync(
+        Tenant tenant, Conversation conversation, Contact contact, CancellationToken ct)
+    {
+        conversation.TransferToHuman();
+        _conversations.Update(conversation);
+        await SendBotMessageAsync(tenant, conversation, contact,
+            "Ok! Vou chamar um atendente para você. Por favor, aguarde um momento. 🙏", ct);
+        await _notifications.NotifyHumanTakeoverRequestAsync(
+            tenant.Id, conversation.Id, contact.GetDisplayName(), ct);
+    }
+
+    private static void AdvanceStageFromIntent(Conversation conversation, string intent)
+    {
+        var next = intent switch
+        {
+            "consulta_produto"  => ConversationStage.BrowsingProducts,
+            "interesse_compra"  => ConversationStage.ProductSelected,
+            "finalizar_pedido"  => ConversationStage.ConfirmingOrder,
+            _                   => (ConversationStage?)null
+        };
+
+        if (next.HasValue && next.Value > conversation.Stage)
+            conversation.AdvanceStage(next.Value);
+    }
+
+    private async Task SendBotMessageAsync(
+        Tenant tenant, Conversation conversation, Contact contact, string content, CancellationToken ct)
     {
         var outbound = Message.CreateOutbound(conversation.Id, tenant.Id, content, MessageSource.Bot);
         await _messages.AddAsync(outbound, ct);

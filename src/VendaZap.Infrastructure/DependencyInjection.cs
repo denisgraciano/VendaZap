@@ -133,7 +133,10 @@ public static class DependencyInjection
 
     private static IServiceCollection AddAiService(this IServiceCollection services, IConfiguration config)
     {
-        services.AddScoped<IAiConversationService, OpenAiConversationService>();
+        // Register the concrete service once; both interfaces resolve to the same instance per scope.
+        services.AddScoped<OpenAiConversationService>();
+        services.AddScoped<IAiConversationService>(sp => sp.GetRequiredService<OpenAiConversationService>());
+        services.AddScoped<IConversationAIService>(sp => sp.GetRequiredService<OpenAiConversationService>());
         return services;
     }
 

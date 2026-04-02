@@ -68,5 +68,6 @@ public static class CacheKeys
     public static string TenantById(Guid tenantId) => $"tenant:{tenantId}";
     public static string TenantBySlug(string slug) => $"tenant:slug:{slug}";
     public static string ConversationContext(Guid conversationId) => $"conversation:{conversationId}:context";
+    public static string ConversationRecentMessages(Guid conversationId) => $"conversation:{conversationId}:messages:recent";
     public static string UserById(Guid userId) => $"user:{userId}";
 }

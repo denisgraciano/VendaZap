@@ -68,8 +68,17 @@ public class Conversation : Entity
     public Result TransferToHuman(Guid? userId = null)
     {
         Mode = ConversationMode.Human;
+        Status = userId.HasValue ? Status : ConversationStatus.WaitingHuman;
         AssignedToUserId = userId;
         AddDomainEvent(new ConversationTransferredToHumanEvent(Id, TenantId, userId));
+        SetUpdatedAt();
+        return Result.Success();
+    }
+
+    public Result AssignHumanAgent(Guid userId)
+    {
+        AssignedToUserId = userId;
+        Status = ConversationStatus.Open;
         SetUpdatedAt();
         return Result.Success();
     }

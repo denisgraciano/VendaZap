@@ -362,6 +362,9 @@ partial class AppDbContextModelSnapshot : ModelSnapshot
             b.HasIndex("TenantId", "ContactId", "Status")
                 .HasDatabaseName("ix_conversations_tenant_id_contact_id_status");
 
+            b.HasIndex("TenantId", "Status", "CreatedAt")
+                .HasDatabaseName("ix_conversations_tenant_id_status_created_at");
+
             b.ToTable("conversations");
         });
 

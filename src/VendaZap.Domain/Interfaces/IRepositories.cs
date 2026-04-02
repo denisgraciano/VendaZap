@@ -52,6 +52,7 @@ public interface IContactRepository : IRepository<Contact>
 public interface IConversationRepository : IRepository<Conversation>
 {
     Task<Conversation?> GetActiveByContactAsync(Guid tenantId, Guid contactId, CancellationToken ct = default);
+    Task<(Conversation conversation, bool isNew)> GetOrCreateByPhoneAsync(Guid tenantId, string customerPhone, string? customerName, CancellationToken ct = default);
     Task<IEnumerable<Conversation>> GetByTenantAsync(Guid tenantId, ConversationStatus? status, int page, int pageSize, CancellationToken ct = default);
     Task<Conversation?> GetWithMessagesAsync(Guid id, CancellationToken ct = default);
     Task<int> CountOpenAsync(Guid tenantId, CancellationToken ct = default);
@@ -61,7 +62,9 @@ public interface IConversationRepository : IRepository<Conversation>
 public interface IMessageRepository : IRepository<Message>
 {
     Task<IEnumerable<Message>> GetByConversationAsync(Guid conversationId, int page, int pageSize, CancellationToken ct = default);
+    Task<IEnumerable<Message>> GetRecentMessagesAsync(Guid conversationId, CancellationToken ct = default);
     Task<Message?> GetByWhatsAppIdAsync(string whatsAppMessageId, CancellationToken ct = default);
+    Task InvalidateConversationCacheAsync(Guid conversationId, CancellationToken ct = default);
 }
 
 public interface IOrderRepository : IRepository<Order>

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using VendaZap.Application.Common.Interfaces;
 using VendaZap.Domain.Entities;
 using VendaZap.Domain.Enums;
 using VendaZap.Domain.Interfaces;
@@ -97,7 +98,40 @@ public class ConversationRepository : Repository<Conversation>, IConversationRep
         => await _dbSet
             .Include(c => c.Contact)
             .FirstOrDefaultAsync(c =>
-                c.TenantId == tenantId && c.ContactId == contactId && c.Status == ConversationStatus.Open, ct);
+                c.TenantId == tenantId && c.ContactId == contactId &&
+                (c.Status == ConversationStatus.Open || c.Status == ConversationStatus.WaitingHuman), ct);
+
+    public async Task<(Conversation conversation, bool isNew)> GetOrCreateByPhoneAsync(
+        Guid tenantId, string customerPhone, string? customerName, CancellationToken ct = default)
+    {
+        // Upsert contact by phone + tenantId
+        var contact = await _context.Set<Contact>()
+            .FirstOrDefaultAsync(c => c.TenantId == tenantId && c.PhoneNumber == customerPhone, ct);
+
+        if (contact is null)
+        {
+            contact = Contact.Create(tenantId, customerPhone, customerName);
+            await _context.Set<Contact>().AddAsync(contact, ct);
+        }
+        else if (customerName is not null && contact.Name is null)
+        {
+            contact.UpdateProfile(customerName, null, null, null, null, null);
+        }
+
+        // Get active conversation (Open or WaitingHuman)
+        var conversation = await _dbSet
+            .Include(c => c.Contact)
+            .FirstOrDefaultAsync(c =>
+                c.TenantId == tenantId && c.ContactId == contact.Id &&
+                (c.Status == ConversationStatus.Open || c.Status == ConversationStatus.WaitingHuman), ct);
+
+        if (conversation is not null)
+            return (conversation, false);
+
+        conversation = Conversation.Create(tenantId, contact.Id);
+        await _dbSet.AddAsync(conversation, ct);
+        return (conversation, true);
+    }
 
     public async Task<IEnumerable<Conversation>> GetByTenantAsync(Guid tenantId, ConversationStatus? status, int page, int pageSize, CancellationToken ct = default)
     {
@@ -139,7 +173,14 @@ public class ConversationRepository : Repository<Conversation>, IConversationRep
 
 public class MessageRepository : Repository<Message>, IMessageRepository
 {
-    public MessageRepository(AppDbContext context) : base(context) { }
+    private readonly ICacheService? _cache;
+    private static readonly TimeSpan MessageCacheTtl = TimeSpan.FromHours(24);
+    private const int RecentMessageLimit = 20;
+
+    public MessageRepository(AppDbContext context, ICacheService? cache = null) : base(context)
+    {
+        _cache = cache;
+    }
 
     public async Task<IEnumerable<Message>> GetByConversationAsync(Guid conversationId, int page, int pageSize, CancellationToken ct = default)
         => await _dbSet
@@ -148,8 +189,67 @@ public class MessageRepository : Repository<Message>, IMessageRepository
             .Skip((page - 1) * pageSize).Take(pageSize)
             .ToListAsync(ct);
 
+    public async Task<IEnumerable<Message>> GetRecentMessagesAsync(Guid conversationId, CancellationToken ct = default)
+    {
+        var cacheKey = CacheKeys.ConversationRecentMessages(conversationId);
+
+        if (_cache is not null)
+        {
+            var cached = await _cache.GetAsync<List<CachedMessage>>(cacheKey, ct);
+            if (cached is not null)
+                return cached.Select(m => m.ToMessage()).ToList();
+        }
+
+        var messages = await _dbSet
+            .Where(m => m.ConversationId == conversationId)
+            .OrderByDescending(m => m.CreatedAt)
+            .Take(RecentMessageLimit)
+            .OrderBy(m => m.CreatedAt)
+            .ToListAsync(ct);
+
+        if (_cache is not null)
+        {
+            var toCache = messages.Select(CachedMessage.FromMessage).ToList();
+            await _cache.SetAsync(cacheKey, toCache, MessageCacheTtl, ct);
+        }
+
+        return messages;
+    }
+
+    public async Task InvalidateConversationCacheAsync(Guid conversationId, CancellationToken ct = default)
+    {
+        if (_cache is not null)
+            await _cache.RemoveAsync(CacheKeys.ConversationRecentMessages(conversationId), ct);
+    }
+
     public async Task<Message?> GetByWhatsAppIdAsync(string whatsAppMessageId, CancellationToken ct = default)
         => await _dbSet.FirstOrDefaultAsync(m => m.WhatsAppMessageId == whatsAppMessageId, ct);
+}
+
+// Lightweight DTO for Redis serialization (avoids EF navigation cycles)
+internal record CachedMessage(
+    Guid Id, Guid ConversationId, Guid TenantId,
+    string Content, int Direction, int Type, int Status, int Source,
+    string? WhatsAppMessageId, string? MediaUrl, string? MediaMimeType,
+    DateTime CreatedAt, DateTime? DeliveredAt, DateTime? ReadAt)
+{
+    public static CachedMessage FromMessage(Message m) => new(
+        m.Id, m.ConversationId, m.TenantId,
+        m.Content, (int)m.Direction, (int)m.Type, (int)m.Status, (int)m.Source,
+        m.WhatsAppMessageId, m.MediaUrl, m.MediaMimeType,
+        m.CreatedAt, m.DeliveredAt, m.ReadAt);
+
+    public Message ToMessage()
+    {
+        // Use EF shadow constructor via reflection-free projection
+        var msg = Message.Reconstitute(
+            Id, ConversationId, TenantId, Content,
+            (MessageDirection)Direction, (MessageType)Type,
+            (MessageStatus)Status, (MessageSource)Source,
+            WhatsAppMessageId, MediaUrl, MediaMimeType,
+            CreatedAt, DeliveredAt, ReadAt);
+        return msg;
+    }
 }
 
 public class OrderRepository : Repository<Order>, IOrderRepository

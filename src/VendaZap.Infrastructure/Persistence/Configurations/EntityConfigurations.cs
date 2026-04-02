@@ -87,6 +87,7 @@ public class ConversationConfiguration : IEntityTypeConfiguration<Conversation>
         builder.HasKey(c => c.Id);
         builder.HasIndex(c => new { c.TenantId, c.Status });
         builder.HasIndex(c => new { c.TenantId, c.ContactId, c.Status });
+        builder.HasIndex(c => new { c.TenantId, c.Status, c.CreatedAt });
         builder.Property(c => c.LastMessagePreview).HasMaxLength(200);
         builder.Property(c => c.WhatsAppConversationId).HasMaxLength(100);
         builder.Property(c => c.AiThreadId).HasMaxLength(100);

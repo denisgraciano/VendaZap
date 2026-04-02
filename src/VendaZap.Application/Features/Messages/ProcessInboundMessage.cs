@@ -83,6 +83,7 @@ public class ProcessInboundMessageCommandHandler : IRequestHandler<ProcessInboun
         conversation.AddMessage(inboundMessage);
 
         await _uow.SaveChangesAsync(ct);
+        await _messages.InvalidateConversationCacheAsync(conversation.Id, ct);
 
         // Mark as read on WhatsApp
         await _whatsApp.MarkMessageAsReadAsync(
@@ -237,6 +238,7 @@ public class ProcessInboundMessageCommandHandler : IRequestHandler<ProcessInboun
         conversation.AddMessage(outbound);
         _conversations.Update(conversation);
         await _uow.SaveChangesAsync(ct);
+        await _messages.InvalidateConversationCacheAsync(conversation.Id, ct);
 
         var waId = await _whatsApp.SendTextMessageAsync(
             tenant.WhatsAppPhoneNumberId, tenant.WhatsAppAccessToken, contact.PhoneNumber, content, ct);

@@ -95,4 +95,31 @@ public class Message : Entity
         ErrorMessage = errorMessage;
         SetUpdatedAt();
     }
+
+    // Used to rebuild a Message from cache without EF tracking
+    public static Message Reconstitute(
+        Guid id, Guid conversationId, Guid tenantId,
+        string content, MessageDirection direction, MessageType type,
+        MessageStatus status, MessageSource source,
+        string? whatsAppMessageId, string? mediaUrl, string? mediaMimeType,
+        DateTime createdAt, DateTime? deliveredAt, DateTime? readAt)
+    {
+        return new Message
+        {
+            Id = id,
+            CreatedAt = createdAt,
+            ConversationId = conversationId,
+            TenantId = tenantId,
+            Content = content,
+            Direction = direction,
+            Type = type,
+            Status = status,
+            Source = source,
+            WhatsAppMessageId = whatsAppMessageId,
+            MediaUrl = mediaUrl,
+            MediaMimeType = mediaMimeType,
+            DeliveredAt = deliveredAt,
+            ReadAt = readAt
+        };
+    }
 }

@@ -214,7 +214,10 @@ public static class DependencyInjection
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IContactRepository, ContactRepository>();
         services.AddScoped<IConversationRepository, ConversationRepository>();
-        services.AddScoped<IMessageRepository, MessageRepository>();
+        services.AddScoped<IMessageRepository>(sp =>
+            new MessageRepository(
+                sp.GetRequiredService<AppDbContext>(),
+                sp.GetService<ICacheService>()));
         services.AddScoped<IOrderRepository, OrderRepository>();
         services.AddScoped<ICampaignRepository, CampaignRepository>();
         services.AddScoped<IAutoReplyTemplateRepository, AutoReplyTemplateRepository>();

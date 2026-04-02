@@ -7,7 +7,7 @@ public enum UserRole { Owner = 1, Manager = 2, Agent = 3 }
 
 public enum ProductStatus { Active = 1, Inactive = 2, OutOfStock = 3 }
 
-public enum ConversationStatus { Open = 1, Closed = 2, Archived = 3 }
+public enum ConversationStatus { Open = 1, Closed = 2, Archived = 3, WaitingHuman = 4 }
 public enum ConversationMode { Bot = 1, Human = 2 }
 public enum ConversationStage
 {
